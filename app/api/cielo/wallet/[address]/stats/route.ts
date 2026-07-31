@@ -1,8 +1,8 @@
 // API Route: /api/cielo/wallet/[address]/stats
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getCieloClient } from '@/lib/cielo/client';
 import { getWalletByAddress } from '@/lib/data';
+
+const CIELO_API_BASE = 'https://feed-api.cielo.finance/api/v1';
 
 export async function GET(
   request: NextRequest,
@@ -10,13 +10,10 @@ export async function GET(
 ) {
   try {
     const { address } = await params;
-    
-    // Get mock wallet data as fallback
+
+    // Fallback to mock data if no API key
     const mockWallet = getWalletByAddress(address);
-    
-    // Check if Cielo API key is configured
     if (!process.env.CIELO_API_KEY) {
-      // Return enriched mock data
       return NextResponse.json({
         wallet: address,
         totalPnl: mockWallet?.totalPnl || Math.random() * 1000000 * (Math.random() > 0.3 ? 1 : -1),
@@ -24,8 +21,6 @@ export async function GET(
         totalTrades: mockWallet?.totalTrades || Math.floor(Math.random() * 500),
         profitableTrades: Math.floor(Math.random() * 300),
         unprofitableTrades: Math.floor(Math.random() * 200),
-        pnl7d: (Math.random() - 0.3) * 100000,
-        pnl30d: (Math.random() - 0.3) * 500000,
         realizedPnl: Math.random() * 800000 * (Math.random() > 0.3 ? 1 : -1),
         unrealizedPnl: (Math.random() - 0.5) * 200000,
         favoriteTokens: mockWallet?.favoriteTokens || ['SOL', 'BONK', 'JUP'],
@@ -35,44 +30,61 @@ export async function GET(
       });
     }
 
-    const client = getCieloClient();
-    const pnlData = await client.getWalletPnL(address);
-    
-    // Calculate stats from PnL data
+    // Fetch real PnL data from Cielo
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'X-API-KEY': process.env.CIELO_API_KEY,
+      'Accept': 'application/json',
+    };
+
+    // 1. Token PnL (has trades, realized/unrealized per token)
+    const pnlRes = await fetch(`${CIELO_API_BASE}/${address}/pnl/tokens`, { headers });
+    const pnlData = await pnlRes.json();
+
+    // 2. Total stats (has winrate if available)
+    let totalStats: any = null;
+    try {
+      const statsRes = await fetch(`${CIELO_API_BASE}/${address}/pnl/total-stats`, { headers });
+      totalStats = await statsRes.json();
+    } catch { /* ignore */ }
+
+    // Aggregate token PnL items
+    const items: any[] = pnlData?.data?.items ?? [];
     let totalTrades = 0;
-    let profitableTrades = 0;
-    let totalRealizedPnl = 0;
-    let totalUnrealizedPnl = 0;
+    let totalPnl = 0;
+    let totalUnrealized = 0;
+    let totalRealized = 0;
+    const profitableTokens: string[] = [];
     const tokens: string[] = [];
-    
-    if (pnlData.tokens && Array.isArray(pnlData.tokens)) {
-      for (const token of pnlData.tokens) {
-        totalTrades += token.trades_count || 0;
-        totalRealizedPnl += token.realized_pnl || 0;
-        totalUnrealizedPnl += token.unrealized_pnl || 0;
-        if (token.realized_pnl && token.realized_pnl > 0) {
-          profitableTrades++;
-        }
-        if (token.token_symbol) {
-          tokens.push(token.token_symbol);
-        }
-      }
+
+    for (const token of items) {
+      const swaps = token.num_swaps || 0;
+      const pnl = token.total_pnl_usd || 0;
+      const unrealized = token.unrealized_pnl_usd || 0;
+      totalTrades += swaps;
+      totalPnl += pnl;
+      totalUnrealized += unrealized;
+      totalRealized += pnl - unrealized; // realized = total - unrealized
+      if (pnl > 0) profitableTokens.push(token.token_symbol || '');
+      if (token.token_symbol) tokens.push(token.token_symbol);
     }
-    
-    const winRate = totalTrades > 0 ? (profitableTrades / totalTrades) * 100 : 0;
-    
+
+    // Win rate from total-stats if present, else estimate from profitable tokens
+    const winRate = totalStats?.data?.winrate || (items.length > 0 ? (profitableTokens.length / items.length) * 100 : 0);
+
     return NextResponse.json({
       wallet: address,
-      totalPnl: totalRealizedPnl + totalUnrealizedPnl,
+      totalPnl: totalPnl,
       winRate: winRate,
       totalTrades: totalTrades,
-      profitableTrades: profitableTrades,
-      unprofitableTrades: totalTrades - profitableTrades,
-      realizedPnl: totalRealizedPnl,
-      unrealizedPnl: totalUnrealizedPnl,
-      favoriteTokens: tokens.slice(0, 5),
+      profitableTrades: profitableTokens.length,
+      unprofitableTrades: items.length - profitableTokens.length,
+      realizedPnl: totalRealized,
+      unrealizedPnl: totalUnrealized,
+      favoriteTokens: tokens.slice(0, 8),
       lastActivity: new Date().toISOString(),
       chains: ['solana'],
+      source: 'cielo',
     });
   } catch (error) {
     console.error('Cielo API error:', error);

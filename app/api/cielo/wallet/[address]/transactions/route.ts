@@ -1,5 +1,4 @@
 // API Route: /api/cielo/wallet/[address]/transactions
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getCieloClient } from '@/lib/cielo/client';
 
@@ -10,13 +9,12 @@ export async function GET(
   try {
     const { address } = await params;
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const txLimit = parseInt(searchParams.get('limit') || '10', 10);
     const cursor = searchParams.get('cursor') || undefined;
-    
+
     // Check if Cielo API key is configured
     if (!process.env.CIELO_API_KEY) {
-      // Return mock data if no API key
-      const mockTxs = Array.from({ length: limit }, (_, i) => ({
+      const mockTxs = Array.from({ length: txLimit }, (_, i) => ({
         id: `tx_${i}`,
         wallet: address,
         type: Math.random() > 0.5 ? 'swap' : 'transfer',
@@ -33,17 +31,49 @@ export async function GET(
         txHash: `${Math.random().toString(36).substring(7)}...`,
         isMock: true,
       }));
-      
+
       return NextResponse.json({
         data: mockTxs,
         meta: { hasMore: true },
       });
     }
 
+    // Use Cielo feed endpoint: /api/v1/feed?wallet={address}
     const client = getCieloClient();
-    const response = await client.getWalletTransactions(address, { limit, cursor });
-    
-    return NextResponse.json(response);
+    const queryParams = new URLSearchParams({
+      wallet: address,
+      limit: txLimit.toString(),
+    });
+    if (cursor) queryParams.append('cursor', cursor);
+
+    const feed = await client.fetch<any>(`/feed?${queryParams.toString()}`);
+    const items: any[] = feed?.data?.items ?? [];
+
+    // Normalize Cielo feed items to match the expected transaction shape
+    const transactions = items.map((tx: any) => ({
+      id: tx.tx_hash,
+      wallet: tx.wallet || tx.to || tx.from || address,
+      type: tx.tx_type || 'transfer',
+      tokenInSymbol: tx.contract_symbol || tx.amount_symbol || 'SOL',
+      tokenOutSymbol: tx.amount_symbol || tx.contract_symbol || 'USDC',
+      amountIn: tx.amount || 0,
+      amountOut: tx.amount || 0,
+      valueUsd: tx.amount_usd || 0,
+      pnl: tx.pnl || 0,
+      timestamp: new Date((tx.timestamp || 0) * 1000).toISOString(),
+      chain: tx.chain || 'solana',
+      txHash: tx.tx_hash,
+      from: tx.from,
+      to: tx.to,
+    }));
+
+    return NextResponse.json({
+      data: transactions,
+      meta: {
+        hasMore: items.length >= txLimit,
+        nextCursor: feed?.data?.paging?.next_object || null,
+      },
+    });
   } catch (error) {
     console.error('Cielo API error:', error);
     return NextResponse.json(
