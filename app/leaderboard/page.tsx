@@ -6,8 +6,11 @@ import { wallets, formatCurrency } from '@/lib/data';
 import { Trophy, TrendingUp, Medal } from 'lucide-react';
 
 export const metadata = {
-  title: 'Leaderboard | Top Smart Money Wallets',
-  description: 'Rankings of the top performing smart money wallets on Solana by P&L, win rate, and trading activity.',
+  title: 'Leaderboard | Top Smart Money Wallets on Solana',
+  description: 'Rankings of the top performing smart money wallets on Solana by P&L, win rate, and trading activity. See which crypto whales and traders are winning.',
+  alternates: {
+    canonical: 'https://smartmoneydex.com/leaderboard',
+  },
 };
 
 export default function LeaderboardPage() {

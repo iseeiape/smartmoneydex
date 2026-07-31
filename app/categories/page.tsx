@@ -5,6 +5,14 @@ import { WalletTable } from '@/components/wallet-table';
 import { categories, getWalletsByCategory, formatCurrency } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
+export const metadata = {
+  title: 'Wallet Categories | Whales, KOLs, Traders & More | SmartMoneyDEX',
+  description: 'Browse smart money wallets on Solana by category: whales, developers, influencers, institutions, pro traders and KOLs. Find traders that match your strategy.',
+  alternates: {
+    canonical: 'https://smartmoneydex.com/categories',
+  },
+};
+
 export default function CategoriesPage() {
   return (
     <main className="min-h-screen bg-crypto-dark">

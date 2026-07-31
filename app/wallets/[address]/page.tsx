@@ -23,14 +23,41 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: WalletPageProps) {
   const { address } = await params;
   const wallet = getWalletByAddress(address);
-  
+
   if (!wallet) {
-    return { title: 'Wallet Not Found' };
+    return { title: 'Wallet Not Found | SmartMoneyDEX' };
   }
 
+  const pnlLabel = wallet.totalPnl >= 1000000
+    ? `$${(wallet.totalPnl / 1000000).toFixed(2)}M`
+    : wallet.totalPnl >= 1000
+      ? `$${(wallet.totalPnl / 1000).toFixed(1)}K`
+      : `$${wallet.totalPnl.toFixed(0)}`;
+
+  const categoryLabel = wallet.category.charAt(0).toUpperCase() + wallet.category.slice(1);
+  const title = `${wallet.label} Wallet — ${pnlLabel} P&L, ${wallet.totalTrades} Trades | SmartMoneyDEX`;
+  const description = `Track ${wallet.label} (${categoryLabel}) on Solana. ${pnlLabel} realized P&L, ${wallet.totalTrades} trades, ${wallet.winRate.toFixed(1)}% win rate. Real-time on-chain analytics, transactions and portfolio.`;
+  const keywords = [wallet.label, wallet.address, 'solana wallet', 'smart money', 'wallet tracker', 'crypto whale', 'on-chain analysis', wallet.category].join(', ');
+
   return {
-    title: `${wallet.label} | SmartMoneyDEX`,
-    description: `Track ${wallet.label}'s on-chain activity, P&L, and trades. Real-time smart money analytics.`,
+    title,
+    description,
+    keywords,
+    alternates: {
+      canonical: `https://smartmoneydex.com/wallets/${wallet.address}`,
+    },
+    openGraph: {
+      title: `${wallet.label} — Smart Money Wallet on Solana`,
+      description,
+      url: `https://smartmoneydex.com/wallets/${wallet.address}`,
+      type: 'profile',
+      siteName: 'SmartMoneyDEX',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
   };
 }
 
@@ -45,6 +72,44 @@ export default async function WalletDetailPage({ params }: WalletPageProps) {
   return (
     <main className="min-h-screen bg-crypto-dark">
       <Header />
+
+      {/* JSON-LD structured data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@graph': [
+              {
+                '@type': 'ProfilePage',
+                name: `${wallet.label} — Smart Money Wallet`,
+                description: `Track ${wallet.label}'s on-chain activity, P&L, and trades on Solana.`,
+                url: `https://smartmoneydex.com/wallets/${wallet.address}`,
+                mainEntity: {
+                  '@type': 'Person',
+                  name: wallet.label,
+                  description: wallet.description || `Solana smart money wallet tracked by SmartMoneyDEX`,
+                  identifier: wallet.address,
+                  additionalProperty: [
+                    { '@type': 'PropertyValue', name: 'P&L', value: `$${wallet.totalPnl.toLocaleString()}` },
+                    { '@type': 'PropertyValue', name: 'Win Rate', value: `${wallet.winRate.toFixed(1)}%` },
+                    { '@type': 'PropertyValue', name: 'Trades', value: wallet.totalTrades },
+                    { '@type': 'PropertyValue', name: 'Category', value: wallet.category },
+                  ],
+                },
+              },
+              {
+                '@type': 'BreadcrumbList',
+                itemListElement: [
+                  { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://smartmoneydex.com' },
+                  { '@type': 'ListItem', position: 2, name: 'Wallets', item: 'https://smartmoneydex.com/wallets' },
+                  { '@type': 'ListItem', position: 3, name: wallet.label, item: `https://smartmoneydex.com/wallets/${wallet.address}` },
+                ],
+              },
+            ],
+          }),
+        }}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Link */}
