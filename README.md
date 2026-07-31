@@ -165,3 +165,4 @@ vercel --prod
 **SmartMoneyDEX** - Track smart money, trade smarter 🦎
 
 Built with ❤️ for the Solana community
+# Auto-deploy test
