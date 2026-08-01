@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: '/',
   },
+  other: {
+    'msvalidate.01': '6344903EC8E96B412B093C98F3AEAF3A',
+  },
   openGraph: {
     title: 'SmartMoneyDEX | Track Top Solana Wallets & Smart Money',
     description: 'Discover and track the top smart money wallets on Solana. Real-time leaderboards, P&L analytics, win rates, and on-chain insights.',
